@@ -1,50 +1,52 @@
 package io.github.dekuofa1995.chapter5
 
+import io.github.dekuofa1995.chapter5.Stream._
+
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
 
 case object Empty extends Stream[Nothing]
 
 sealed trait Stream[+A] {
   def headOption: Option[A] = this match {
-    case Empty => None
+    case Empty      => None
     case Cons(h, _) => Some(h())
   }
 
   override def toString: String =
     this match {
-      case Empty => "Empty"
+      case Empty      => "Empty"
       case Cons(h, t) => s"Cons(${h()}, ${t().toString})"
     }
 
   def toList: List[A] =
     this match {
-      case Empty => Nil
+      case Empty      => Nil
       case Cons(h, t) => h() :: t().toList
     }
 
   def take(n: Int): Stream[A] =
     this match {
-      case Cons(h, t) if n > 1 => cons(h(), t().take(n - 1))
+      case Cons(h, t) if n > 1  => cons(h(), t().take(n - 1))
       case Cons(h, _) if n == 1 => cons(h(), empty)
-      case _ => empty
+      case _                    => empty
     }
 
   @annotation.tailrec
   final def drop(n: Int): Stream[A] =
     this match {
       case Cons(_, t) if n > 0 => t().drop(n - 1)
-      case _ => this
+      case _                   => this
     }
 
   def takeWhile(p: A => Boolean): Stream[A] =
     this match {
       case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
-      case _ => empty
+      case _                    => empty
     }
 
   // 5.4 检测 Stream 中所有元素是否与给定断言匹配，遇到不匹配的值应立即终止
   def forAll(p: A => Boolean): Boolean =
-  //    foldRight(true)((a, b) => p(a) && b)
+    //    foldRight(true)((a, b) => p(a) && b)
     !exists(a => !p(a))
 
   //  def exists(p: A => Boolean): Boolean =
@@ -59,13 +61,12 @@ sealed trait Stream[+A] {
 
   // 5.5 使用 foldRight 实现 takeWhile
   def takeWhileViaFoldRight(p: A => Boolean): Stream[A] =
-    foldRight[Stream[A]](empty)(
-      (h, t) => {
-        // 此处t.takeWhileViaFoldRight 多余，foldRight 会根据情况，在需要的时候自动调用
-        //        if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
-        if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
-        else empty
-      })
+    foldRight[Stream[A]](empty)((h, t) => {
+      // 此处t.takeWhileViaFoldRight 多余，foldRight 会根据情况，在需要的时候自动调用
+      //        if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
+      if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
+      else empty
+    })
 
   // (难)5.6 使用 foldRight 实现 headOption
   def headOptionViaFoldRight: Option[A] =
@@ -89,11 +90,10 @@ sealed trait Stream[+A] {
   def foldRight[B](z: => B)(f: (A, => B) => B): B =
     this match {
       case Cons(h, t) => f(h(), t().foldRight(z)(f))
-      case _ => z
+      case _          => z
     }
 
 }
-
 
 object Stream {
   def apply[A](as: A*): Stream[A] =
@@ -101,21 +101,27 @@ object Stream {
     else cons(as.head, apply(as.tail: _*))
 
   def check_5_4(): Unit = {
-    assert(!Stream(1, 2, 3, 4, 5).forAll(i => {assert(i <= 4); i < 4 }))
-    assert(Stream(1, 2, 3, 4, 5).forAll(i => {assert(i <= 6); i < 6 }))
-    assert((empty: Stream[Int]).forAll(i => {assert(i <= 6); i < 6 }))
+    assert(!Stream(1, 2, 3, 4, 5).forAll(i => { assert(i <= 4); i < 4 }))
+    assert(Stream(1, 2, 3, 4, 5).forAll(i => { assert(i <= 6); i < 6 }))
+    assert((empty: Stream[Int]).forAll(i => { assert(i <= 6); i < 6 }))
   }
 
   def check_5_5(): Unit = {
     assert(
       Stream(1, 2, 3, 4, 5).toString ==
-      Stream(1, 2, 3, 4, 5).takeWhileViaFoldRight(i => {assert(i <= 6); i < 6 }).toString)
+        Stream(1, 2, 3, 4, 5)
+          .takeWhileViaFoldRight(i => { assert(i <= 6); i < 6 })
+          .toString)
     assert(
       Stream(1, 2, 3).toString ==
-      Stream(1, 2, 3, 4, 5).takeWhileViaFoldRight(i => {assert(i <= 4); i < 4 }).toString)
+        Stream(1, 2, 3, 4, 5)
+          .takeWhileViaFoldRight(i => { assert(i <= 4); i < 4 })
+          .toString)
     assert(
       empty.toString ==
-      (empty: Stream[Int]).takeWhileViaFoldRight(i => {assert(i <= 4); i < 4 }).toString)
+        (empty: Stream[Int])
+          .takeWhileViaFoldRight(i => { assert(i <= 4); i < 4 })
+          .toString)
   }
 
   def check_5_6(): Unit = {
@@ -125,7 +131,10 @@ object Stream {
   }
 
   def check_5_7_append(): Unit = {
-    assert(Stream(1, 2).append(Stream(3, 4, 5)).toString == Stream(1, 2, 3, 4, 5).toString)
+    assert(
+      Stream(1, 2)
+        .append(Stream(3, 4, 5))
+        .toString == Stream(1, 2, 3, 4, 5).toString)
     assert(Stream(1).append(empty).toString == Stream(1).toString)
     assert(empty.append(Stream(1)).toString == Stream(1).toString)
     assert(empty.append(empty).toString == empty.toString)
@@ -137,7 +146,8 @@ object Stream {
 
   def check_5_8(): Unit = {
     assert(Stream(5, 5, 5, 5, 5).toString == constant(5).take(5).toString)
-    assert(Stream(6, 6, 6, 6, 6).toString == constant(5).map(_ + 1).take(5).toString)
+    assert(
+      Stream(6, 6, 6, 6, 6).toString == constant(5).map(_ + 1).take(5).toString)
   }
 
   // 无限流与共递归
@@ -155,7 +165,8 @@ object Stream {
 
   def check_5_9(): Unit = {
     assert(Stream(5, 6, 7, 8, 9).toString == from(5).take(5).toString)
-    assert(Stream(7, 8, 9, 10, 11).toString == from(5).map(_ + 2).take(5).toString)
+    assert(
+      Stream(7, 8, 9, 10, 11).toString == from(5).map(_ + 2).take(5).toString)
   }
 
   // 5.10 写一个 fibs 函数生成斐波那契数列的无限流：0,1,1,2,3,5,8...
@@ -169,13 +180,13 @@ object Stream {
   def check_5_10(): Unit = {
     assert(
       Stream(0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55).toString
-      == fibs().takeWhile(_ <= 55).toString)
+        == fibs().takeWhile(_ <= 55).toString)
   }
 
   // todo check
   /* 5.12 使用 unfold 重写 fibs、from、constant、和ones */
   def fibsViaUnfold(): Stream[Int] =
-  unfold(0, 1)(s => Some((s._1, (s._2, s._1 + s._2))))
+    unfold(0, 1)(s => Some((s._1, (s._2, s._1 + s._2))))
 
   // answer
   //val fibs = {
@@ -187,7 +198,7 @@ object Stream {
   def check_5_12_fibs(): Unit = {
     assert(
       Stream(0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55).toString
-      == fibsViaUnfold().takeWhile(_ <= 55).toString)
+        == fibsViaUnfold().takeWhile(_ <= 55).toString)
   }
 
   def fromViaUnfold(z: Int): Stream[Int] =
@@ -203,7 +214,11 @@ object Stream {
 
   def check_5_12_from(): Unit = {
     assert(Stream(5, 6, 7, 8, 9).toString == fromViaUnfold(5).take(5).toString)
-    assert(Stream(7, 8, 9, 10, 11).toString == fromViaUnfold(5).map(_ + 2).take(5).toString)
+    assert(
+      Stream(7, 8, 9, 10, 11).toString == fromViaUnfold(5)
+        .map(_ + 2)
+        .take(5)
+        .toString)
   }
 
   //val fibsViaUnfold =
@@ -213,12 +228,17 @@ object Stream {
     unfold(a)(_ => Some(a, a))
 
   def check_5_12_constant(): Unit = {
-    assert(Stream(5, 5, 5, 5, 5).toString == constantViaUnfold(5).take(5).toString)
-    assert(Stream(6, 6, 6, 6, 6).toString == constantViaUnfold(5).map(_ + 1).take(5).toString)
+    assert(
+      Stream(5, 5, 5, 5, 5).toString == constantViaUnfold(5).take(5).toString)
+    assert(
+      Stream(6, 6, 6, 6, 6).toString == constantViaUnfold(5)
+        .map(_ + 1)
+        .take(5)
+        .toString)
   }
 
   def onesViaUnfold(): Stream[Int] =
-  //constant(1)
+    //constant(1)
     unfold(1)(_ => Some(1, 1))
 
   // 5.11 写一个更加通用的构造流的函数 unfold。
@@ -228,7 +248,7 @@ object Stream {
     def go(curr: Option[(A, S)]): Stream[A] =
       curr match {
         case Some((a, s)) => cons(a, go(f(s)))
-        case None => empty
+        case None         => empty
       }
 
     go(f(z))
@@ -255,6 +275,5 @@ object Stream {
     //check_5_12_from()
     check_5_12_constant()
   }
-
 
 }

@@ -1,5 +1,7 @@
 package io.github.dekuofa1995.chapter2
 
+import scala.annotation.tailrec
+
 object MyModule {
 
   def abs(n: Int): Int = {
@@ -20,6 +22,16 @@ object MyModule {
   def isNotSorted[A](as: Array[A], ordered: (A, A) => Boolean): Boolean =
     !isSorted(as, ordered)
 
+  // 2.2
+  def isSorted[A](as: Array[A], ordered: (A, A) => Boolean): Boolean = {
+    if (as.length <= 1) return true
+    for (i <- 1 until as.length) {
+      if (!ordered(as(i - 1), as(i)))
+        return false
+    }
+    true
+  }
+
   // 2.3 柯里化
   def curry[A, B, C](f: (A, B) => C): A => B => C =
     (a: A) => (b: B) => f(a, b)
@@ -37,16 +49,6 @@ object MyModule {
     assert(isSorted(Array(1, 2, 3, 4, 5), (p: Int, n: Int) => p <= n))
     assert(!isSorted(Array(1, 2, 3, 5, 4), (p: Int, n: Int) => p <= n))
     assert(isSorted(Array(1, 2, 3, 5, 5), (p: Int, n: Int) => p <= n))
-  }
-
-  // 2.2
-  def isSorted[A](as: Array[A], ordered: (A, A) => Boolean): Boolean = {
-    if (as.length <= 1) return true
-    for (i <- 1 until as.length) {
-      if (!ordered(as(i - 1), as(i)))
-        return false
-    }
-    true
   }
 
   def factorial(n: Int): Int = {

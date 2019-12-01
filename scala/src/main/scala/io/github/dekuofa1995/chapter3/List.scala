@@ -1,5 +1,10 @@
 package io.github.dekuofa1995.chapter3
 
+import io.github.dekuofa1995.common.StackSafe
+import io.github.dekuofa1995.common.UnStackSafe
+
+import scala.annotation.tailrec
+
 sealed trait List[+A]
 
 case object Nil extends List[Nothing]
@@ -8,20 +13,19 @@ case class Cons[+A](head: A, tail: List[A]) extends List[A]
 
 object List {
   def sum(ints: List[Int]): Int = ints match {
-    case Nil => 0
+    case Nil         => 0
     case Cons(x, xs) => x + sum(xs)
   }
 
   def product(ds: List[Double]): Double = ds match {
-    case Nil => 1.0
+    case Nil          => 1.0
     case Cons(0.0, _) => 0.0
-    case Cons(x, xs) => x * product(xs)
+    case Cons(x, xs)  => x * product(xs)
   }
 
   def apply[A](as: A*): List[A] =
     if (as.isEmpty) Nil
     else Cons(as.head, apply(as.tail: _*))
-
 
   def example1(): Unit = {
     val ex1: List[Double] = Nil
@@ -34,11 +38,11 @@ object List {
 
   def work_3_1(): Unit = {
     val x = List(1, 2, 3, 4, 5) match {
-      case Cons(x, Cons(2, Cons(4, _))) => x
-      case Nil => 42
+      case Cons(x, Cons(2, Cons(4, _)))          => x
+      case Nil                                   => 42
       case Cons(x, Cons(y, Cons(3, Cons(4, _)))) => x + y
-      case Cons(h, t) => h + sum(t)
-      case _ => 101
+      case Cons(h, t)                            => h + sum(t)
+      case _                                     => 101
     }
     println(x)
   }
@@ -46,7 +50,7 @@ object List {
   // 3.2 删除给定List的第一个元素
   def tail[A](ds: List[A]): List[A] =
     ds match {
-      case Nil => Nil // should throw an error?
+      case Nil        => Nil // should throw an error?
       case Cons(_, t) => t
     }
 
@@ -59,7 +63,7 @@ object List {
   // 3.3 替换List中第一个元素
   def setHead[A](ds: List[A], h: A): List[A] =
     ds match {
-      case Nil => Cons(h, Nil) // throw error?
+      case Nil         => Cons(h, Nil) // throw error?
       case Cons(_, xs) => Cons(h, xs)
     }
 
@@ -75,10 +79,11 @@ object List {
   def drop[A](l: List[A], n: Int): List[A] = {
     // 忽略了n < 0 的参数异常情况
     if (n <= 0) l
-    else l match {
-      case Nil => Nil // 忽略了删除长度超过列表总长的情况
-      case Cons(_, xs) => drop(xs, n - 1)
-    }
+    else
+      l match {
+        case Nil         => Nil // 忽略了删除长度超过列表总长的情况
+        case Cons(_, xs) => drop(xs, n - 1)
+      }
 
   }
 
@@ -94,7 +99,7 @@ object List {
   def dropWhile[A](l: List[A], f: A => Boolean): List[A] =
     l match {
       case Cons(h, t) if f(h) => dropWhile(t, f)
-      case _ => l
+      case _                  => l
     }
 
   def check_3_5(): Unit = {
@@ -106,7 +111,7 @@ object List {
   @UnStackSafe
   def append[A](a1: List[A], a2: List[A]): List[A] = {
     a1 match {
-      case Nil => a2
+      case Nil        => a2
       case Cons(h, t) => Cons(h, append(t, a2))
     }
   }
@@ -115,13 +120,12 @@ object List {
   @UnStackSafe
   def init[A](l: List[A]): List[A] =
     l match {
-      case Nil => Nil
+      case Nil          => Nil
       case Cons(_, Nil) => Nil
-      case Cons(x, xs) => Cons(x, init(xs))
+      case Cons(x, xs)  => Cons(x, init(xs))
     }
 
   // todo stack safe version
-
 
   def check_3_6(): Unit = {
     assert(List(1, 2, 3) == init(List(1, 2, 3, 4)))
@@ -145,7 +149,7 @@ object List {
   @UnStackSafe
   def foldRight[A, B](as: List[A], z: B)(f: (A, B) => B): B =
     as match {
-      case Nil => z
+      case Nil         => z
       case Cons(x, xs) => f(x, foldRight(xs, z)(f))
     }
 
@@ -178,7 +182,7 @@ object List {
   @StackSafe
   @tailrec
   def foldLeft[A, B](as: List[A], z: B)(f: (B, A) => B): B = as match {
-    case Nil => z
+    case Nil         => z
     case Cons(x, xs) => foldLeft(xs, f(z, x))(f)
   }
 
@@ -208,12 +212,11 @@ object List {
 
   // 3.12 颠倒原列表的元素顺序
   def reverse[A](l: List[A]): List[A] =
-    foldLeft(l, Nil: List[A])(
-      (l, a) =>
-        l match {
-          case Nil => Cons(a, Nil)
-          case _ => Cons(a, l)
-        })
+    foldLeft(l, Nil: List[A])((l, a) =>
+      l match {
+        case Nil => Cons(a, Nil)
+        case _   => Cons(a, l)
+    })
 
   def check_3_12(): Unit = {
     assert(List(4, 3, 2, 1) == reverse(List(1, 2, 3, 4)))
@@ -221,8 +224,6 @@ object List {
     assert(List(1) == reverse(List(1)))
     assert(Nil == reverse(Nil))
   }
-
-
   @UnStackSafe
   def foldRightViaFoldLeft[A, B](l: List[A], z: B)(f: (A, B) => B): B =
     foldLeft(reverse(l), z)((a, b) => f(b, a))
@@ -231,7 +232,6 @@ object List {
   @UnStackSafe
   def foldRightViaFoldLeft_1[A, B](l: List[A], z: B)(f: (A, B) => B): B =
     foldLeft(l, (b: B) => b)((g, a) => b => g(f(a, b)))(z)
-
 
   // 使用foldRight 或者foldLeft 实现append
   def append2[A](l: List[A], r: List[A]): List[A] =
@@ -276,7 +276,7 @@ object List {
       (a, t) =>
         if (p(a)) Cons(a, t)
         else t
-      )
+    )
 
   def check_3_19(): Unit = {
     assert(List(3, 4) == filter(List(1, 2, 3, 4))(a => a > 2))
@@ -306,8 +306,8 @@ object List {
 
   def addPairwise(a: List[Int], b: List[Int]): List[Int] =
     (a, b) match {
-      case (Nil, _) => Nil
-      case (_, Nil) => Nil
+      case (Nil, _)                     => Nil
+      case (_, Nil)                     => Nil
       case (Cons(ha, ta), Cons(hb, tb)) => Cons(ha + hb, addPairwise(ta, tb))
     }
 
@@ -319,8 +319,8 @@ object List {
 
   def zipWith[A](a: List[A], b: List[A])(f: (A, A) => A): List[A] =
     (a, b) match {
-      case (Nil, _) => Nil
-      case (_, Nil) => Nil
+      case (Nil, _)                     => Nil
+      case (_, Nil)                     => Nil
       case (Cons(ah, at), Cons(bh, bt)) => Cons(f(ah, bh), zipWith(at, bt)(f))
     }
 
@@ -349,7 +349,6 @@ object List {
     assert(hasSubsequence(List(1, 2, 3, 4), List(4)))
     assert(hasSubsequence(List(1, 2, 3, 4), List(1, 2)))
   }
-
 
   def main(args: Array[String]): Unit = {
     //example1()
