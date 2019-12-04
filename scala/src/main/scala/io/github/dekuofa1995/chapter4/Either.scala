@@ -4,29 +4,33 @@ package io.github.dekuofa1995.chapter4
 sealed trait Either[+E, +A] {
   def orElse[EE >: E, B >: A](b: => Either[EE, B]): Either[EE, B] =
     this match {
-      case Left(_) => b
+      case Left(_)  => b
       case Right(_) => this
     }
 
-  def map2[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C): Either[EE, C] =
+  def mapViaFlatMap[EE >: E, B, C](b: Either[EE, B])(
+      f: (A, B) => C
+  ): Either[EE, C] =
     this flatMap (a => b map (bb => f(a, bb)))
 
   def map[B](f: A => B): Either[E, B] =
     this match {
-      case Left(e) => Left(e)
+      case Left(e)  => Left(e)
       case Right(v) => Right(f(v))
     }
 
   def flatMap[EE >: E, B](f: A => Either[EE, B]): Either[EE, B] =
     this match {
-      case Left(e) => Left(e)
+      case Left(e)  => Left(e)
       case Right(v) => f(v)
     }
 
-  def map2_answer[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C): Either[EE, C] =
+  def mapViaFlatMap_answer[EE >: E, B, C](b: Either[EE, B])(
+      f: (A, B) => C
+  ): Either[EE, C] =
     for {
-      aa <- this
-      bb <- b
+      aa <- this // flatMap
+      bb <- b    //map
     } yield f(aa, bb)
 
 }
@@ -50,22 +54,24 @@ object Either {
   //      case h :: t => h flatMap ((hh: A) => sequence(t) map ((tt: List[A]) => List(hh, tt)))
   //    }
 
-
   def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
     as match {
-      case Nil => Right(Nil)
-      case h :: t => (f(h) map2 traverse(t)(f)) (_ :: _)
+      case Nil    => Right(Nil)
+      case h :: t => (f(h) mapViaFlatMap traverse(t)(f))(_ :: _)
     }
 
   def sequence[E, A](es: List[Either[E, A]]): Either[E, List[A]] =
-    traverse_2(es)(e => e)
+    traverseViaFoldRight(es)(e => e)
 
   // todo 重新理解
-  def traverse_2[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
-    as.foldRight[Either[E, List[B]]](Right(Nil))((h, t) => (f(h) map2 t) (_ :: _))
+  def traverseViaFoldRight[E, A, B](as: List[A])(
+      f: A => Either[E, B]
+  ): Either[E, List[B]] =
+    as.foldRight[Either[E, List[B]]](Right(Nil))((h, t) =>
+      (f(h) mapViaFlatMap t)(_ :: _))
 
   def mkPerson(name: String, age: Int): Either[String, Person] =
-    (mkName(name) map2 mkAge(age)) (Person)
+    (mkName(name) mapViaFlatMap mkAge(age))(Person)
 
   def mkName(name: String): Either[String, Name] =
     if (name == "" || name == null) Left("Name is empty.")

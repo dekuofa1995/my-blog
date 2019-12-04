@@ -93,9 +93,97 @@ sealed trait Stream[+A] {
       case _          => z
     }
 
+  // 5.13 使用 unfold 实现 map、take、takeWhile、zipWith以及zipAll
+  def mapViaFold[B](f: A => B): Stream[B] =
+    unfold(this) {
+      case Cons(x, xs) => Some((f(x()), xs()))
+      case _           => None
+    }
+
+  def takeViaFold(n: Int): Stream[A] =
+    unfold((this, n)) {
+      case (Cons(h, t), m) if m > 0 => Some((h(), (t(), m - 1)))
+      case _                        => None
+    }
+
+  def takeWhileViaFold(f: A => Boolean): Stream[A] =
+    unfold(this) {
+      case Cons(h, t) if f(h()) => Some((h(), t()))
+      case _                    => None
+    }
+
+  def zipWith[B, C](s2: Stream[B])(f: (A, B) => C): Stream[C] =
+    unfold((this, s2)) {
+      case (Cons(h1, t1), Cons(h2, t2)) => Some((f(h1(), h2()), (t1(), t2())))
+      case _                            => None
+    }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
+    unfold((this, s2)) {
+      case (Cons(h1, t1), Cons(h2, t2)) =>
+        Some(Some(h1()) -> Some(h2()), t1() -> t2())
+      case (Cons(h1, t1), _) => Some(Some(h1()) -> None, t1() -> empty)
+      case (_, Cons(h2, t2)) => Some(None -> Some(h2()), empty -> t2())
+      case _                 => None
+    }
+
+  def zipWithAll[B, C](s: Stream[B])(
+      f: (Option[A], Option[B]) => C
+  ): Stream[C] =
+    unfold(this -> s) {
+      case (Cons(h1, t1), Cons(h2, t2)) =>
+        Some(f(Some(h1()), Some(h2())) -> (t1(), t2()))
+      case (Cons(h1, t1), _) =>
+        Some(f(Some(h1()), Option.empty[B]) -> (t1(), empty))
+      case (_, Cons(h2, t2)) =>
+        Some(f(Option.empty[A], Some(h2())) -> (empty, t2()))
+      case _ => None
+    }
+
+  // 难 5.14 使用已写过的函数实现 startsWith 函数
+  // 简单版本
+  def startsWith[A](s1: Stream[A]): Boolean =
+    (this, s1) match {
+      case (Empty, Empty) => true
+      case (Cons(h1, t1), Cons(h2, t2)) if h1() == h2() =>
+        t1().startsWith(t2())
+      case (Cons(_, _), _) => true
+      case _               => false
+    }
+
+  // todo 理解
+  def startsWith_2[A](s1: Stream[A]): Boolean =
+    zipAll(s1) takeWhile (opt => opt._2.isDefined) forAll {
+      case (h1, h2) => h1 == h2
+    }
+
+  // todo 理解
+  // 5.15 使用 unfold 实现 tails 函数
+  // 对于一个给定的 Stream，tails 返回这个 Stream 输入序列的所有后缀（包含原始 Stream）
+  // 例如 Stream(1,2,3) 返回 Stream(Stream(1,2,3),Stream(2,3), Stream(3), Stream())
+  def tails: Stream[Stream[A]] =
+    unfold(this) {
+      case Empty => None
+      case s     => Some((s, s drop 1))
+    } append Stream(empty)
+
+  // todo 理解
+  def hasSubsequence[A](s: Stream[A]): Boolean =
+    tails exists (_ startsWith_2 s)
+
+  // todo 5.16
 }
 
 object Stream {
+
+  def cons[A](hd: => A, tl: => Stream[A]): Stream[A] = {
+    lazy val head = hd
+    lazy val tail = tl
+    Cons(() => head, () => tail)
+  }
+
+  def empty[A]: Stream[A] = Empty
+
   def apply[A](as: A*): Stream[A] =
     if (as.isEmpty) empty
     else cons(as.head, apply(as.tail: _*))
@@ -106,12 +194,22 @@ object Stream {
     assert((empty: Stream[Int]).forAll(i => { assert(i <= 6); i < 6 }))
   }
 
+  def factorial(n: Int): Int = {
+    @annotation.tailrec
+    def go(n: Int, acc: Int): Int =
+      if (n <= 0) acc
+      else go(n - 1, n * acc)
+
+    go(n, 1)
+  }
+
   def check_5_5(): Unit = {
     assert(
       Stream(1, 2, 3, 4, 5).toString ==
         Stream(1, 2, 3, 4, 5)
           .takeWhileViaFoldRight(i => { assert(i <= 6); i < 6 })
-          .toString)
+          .toString
+    )
     assert(
       Stream(1, 2, 3).toString ==
         Stream(1, 2, 3, 4, 5)
@@ -183,6 +281,19 @@ object Stream {
         == fibs().takeWhile(_ <= 55).toString)
   }
 
+  // 5.11 写一个更加通用的构造流的函数 unfold。
+  // 接受一个初始状态，以及一个在生成的 Stream 中用于产生下一状态和下一个值的函数
+  // todo 其中的 Option 是用来表示 Stream 何时结束
+  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
+    def go(curr: Option[(A, S)]): Stream[A] =
+      curr match {
+        case Some((a, s)) => cons(a, go(f(s)))
+        case None         => empty
+      }
+
+    go(f(z))
+  }
+
   // todo check
   /* 5.12 使用 unfold 重写 fibs、from、constant、和ones */
   def fibsViaUnfold(): Stream[Int] =
@@ -241,26 +352,21 @@ object Stream {
     //constant(1)
     unfold(1)(_ => Some(1, 1))
 
-  // 5.11 写一个更加通用的构造流的函数 unfold。
-  // 接受一个初始状态，以及一个在生成的 Stream 中用于产生下一状态和下一个值的函数
-  // todo 其中的 Option 是用来表示 Stream 何时结束
-  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
-    def go(curr: Option[(A, S)]): Stream[A] =
-      curr match {
-        case Some((a, s)) => cons(a, go(f(s)))
-        case None         => empty
-      }
-
-    go(f(z))
+  def check_5_13_take(): Unit = {
+    assert(Stream(5).takeViaFold(5).toString == Stream(5).toString)
+    assert(empty.takeViaFold(5).toString == empty.toString)
+    assert(
+      Stream(6, 6, 6, 6, 6).takeViaFold(3).toString == Stream(6, 6, 6).toString)
   }
 
-  def cons[A](hd: => A, tl: => Stream[A]): Stream[A] = {
-    lazy val head = hd
-    lazy val tail = tl
-    Cons(() => head, () => tail)
+  def check_5_14(): Unit = {
+    assert(Stream(5).startsWith_2(Stream(5)))
+    assert(Stream(1, 2, 3, 4).startsWith_2(Stream(1, 2, 3)))
+    assert(
+      Stream(1, 2, 3, 4, 5, 6, 7, 8)
+        .startsWith_2(Stream(1)))
+    assert(!Stream(1).startsWith_2(Stream(1, 2, 3, 4, 5, 6, 7, 8)))
   }
-
-  def empty[A]: Stream[A] = Empty
 
   def main(args: Array[String]): Unit = {
     //cons({ println("head"); 1 }, empty).takeWhile(_ > 0)
@@ -273,7 +379,9 @@ object Stream {
     //check_5_10()
     //check_5_12_fibs()
     //check_5_12_from()
-    check_5_12_constant()
+    //check_5_12_constant()
+    //check_5_13_take()
+    check_5_14()
   }
 
 }
