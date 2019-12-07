@@ -122,5 +122,10 @@ class ListTest extends FunSuite {
     assert(hasSubsequence(List(1, 2, 3, 4), List(2, 3)))
     assert(hasSubsequence(List(1, 2, 3, 4), List(4)))
     assert(hasSubsequence(List(1, 2, 3, 4), List(1, 2)))
+    assert(hasSubsequence(List(1, 2, 3, 4), List(2, 3)))
+
+    assert(!hasSubsequence(List(1, 2, 3, 4), List(1, 2, 3, 4, 5)))
+    assert(!hasSubsequence(List(1, 2, 3, 4), List(1, 2, 4)))
+    assert(!hasSubsequence(List(1, 2, 3, 4), List(2, 4)))
   }
 }

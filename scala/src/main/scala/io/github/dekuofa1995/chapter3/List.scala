@@ -75,7 +75,7 @@ object List {
 
   }
 
-  @scala.annotation.tailrec
+  @annotation.tailrec
   @StackSafe
   def dropWhile[A](l: List[A], f: A => Boolean): List[A] =
     l match {
@@ -170,7 +170,6 @@ object List {
   def foldRightViaFoldLeft[A, B](l: List[A], z: B)(f: (A, B) => B): B =
     foldLeft(reverse(l), z)((a, b) => f(b, a))
 
-  // todo 理解 foldRightViaFoldLeft_1
   @UnStackSafe
   def foldRightViaFoldLeft_1[A, B](l: List[A], z: B)(f: (A, B) => B): B =
     foldLeft(l, (b: B) => b)((g, a) => b => g(f(a, b)))(z)
@@ -231,14 +230,20 @@ object List {
   def addPairwiseViaZipWith(a: List[Int], b: List[Int]): List[Int] =
     zipWith(a, b)(_ + _)
 
-  @scala.annotation.tailrec
-  def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean =
+  @annotation.tailrec
+  def startsWith[A](sup: List[A], sub: List[A]): Boolean =
     (sup, sub) match {
-      case (_, Nil) => true
-      case (Nil, _) => false
-      case (Cons(h1, t1), Cons(h2, t2)) =>
-        if (h1 == h2) hasSubsequence(t1, t2)
-        else hasSubsequence(t1, sub)
+      case (_, Nil)                                 => true
+      case (Cons(h1, t1), Cons(h2, t2)) if h1 == h2 => startsWith(t1, t2)
+      case _                                        => false
+    }
+
+  @annotation.tailrec
+  def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean =
+    sup match {
+      case Nil                       => sub == Nil
+      case _ if startsWith(sup, sub) => true // 从当前节点开始与 sub 列表匹配
+      case Cons(_, t)                => hasSubsequence(t, sub) // 处理 sup 下一节点
     }
 
 }

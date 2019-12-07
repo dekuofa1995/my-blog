@@ -23,4 +23,8 @@ class RNGTest extends FunSuite {
     })
   }
 
+  test("rollDie") {
+    assert(RNG.zero._1 == 0)
+  }
+
 }

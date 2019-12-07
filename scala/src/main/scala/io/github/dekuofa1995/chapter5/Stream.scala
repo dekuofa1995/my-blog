@@ -172,6 +172,13 @@ sealed trait Stream[+A] {
     tails exists (_ startsWith_2 s)
 
   // todo 5.16
+  // 难***
+  def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] =
+    foldRight((z, Stream(z)))((a, b) => {
+      lazy val b1 = b
+      val b2      = f(a, b1._1)
+      (b2, cons(b2, b1._2))
+    })._2
 }
 
 object Stream {

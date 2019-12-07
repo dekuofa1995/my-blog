@@ -53,6 +53,78 @@ object RNG {
     }
   }
 
+  type Rand[+A] = RNG => (A, RNG)
+  val int: Rand[Int] = _.nextInt
+  val zero           = rollDie(SimpleRNG(5))
+
+  def nonNegativeEven: Rand[Int] =
+    map(nonNegativeInt)(i => i - i % 2)
+
+  // 6.5 生成 [0,1) 范围内的 Double 数
+  def doubleViaMap: Rand[Double] =
+    map(nonNegativeInt)(i => i / (Int.MaxValue.doubleValue() + 1))
+
+  def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
+    rng => {
+      val (a, rng2) = s(rng)
+      (f(a), rng2)
+    }
+
+  def randIntDouble: Rand[(Int, Double)] =
+    both(int, double)
+
+  def randDoubleInt: Rand[(Double, Int)] =
+    both(double, int)
+
+  def both[A, B](ra: Rand[A], rb: Rand[B]): Rand[(A, B)] =
+    map2(ra, rb)((_, _))
+
+  // 6.6
+  def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    rng => {
+      val (a, rng2) = ra(rng)
+      val (b, rng3) = rb(rng2)
+      (f(a, b), rng3)
+    }
+
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
+    fs.foldRight(unit[List[A]](Nil))((f, acc) => {
+      map2(f, acc)(_ :: _)
+    })
+
+  def unit[A](a: A): Rand[A] =
+    rng => (a, rng)
+
+  def nonNegativeLessThan(n: Int): Rand[Int] =
+    flatMap(nonNegativeInt) { i =>
+      val mod = i % n
+      if (i + (n - 1) - mod >= 0)
+        unit(mod)
+      else nonNegativeLessThan(n)
+    }
+
+  // 6.9 使用 flatMap 实现 map 和 map2
+  def mapViaFlatMap[A, B](s: Rand[A])(f: A => B): Rand[B] =
+    flatMap(s) { a =>
+      unit(f(a))
+    }
+
+  // 6.8
+  def flatMap[A, B](f: Rand[A])(g: A => Rand[B]): Rand[B] =
+    rng => {
+      val (a, rng1) = f(rng)
+      g(a)(rng1)
+    }
+
+  def map2ViaFlatMap[A, B, C](ra: Rand[A], rb: Rand[B])(
+      f: (A, B) => C
+  ): Rand[C] =
+    flatMap(ra)(a => map(rb)(b => f(a, b)))
+
+  def rollDie: Rand[Int] = nonNegativeLessThan(6)
+
+  def rollDie_Fix: Rand[Int] = map(nonNegativeLessThan(6))(_ + 1)
+
   case class SimpleRNG(seed: Long) extends RNG {
     override def nextInt: (Int, RNG) = {
       val nextSeed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
