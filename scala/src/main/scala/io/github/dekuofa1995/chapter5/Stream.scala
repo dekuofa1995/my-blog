@@ -24,30 +24,58 @@ sealed trait Stream[+A] {
       case Cons(h, t) => h() :: t().toList
     }
 
+  //def take(n: Int): Stream[A] =
+  //  this match {
+  //    case Cons(h, t) if n > 1  => cons(h(), t().take(n - 1))
+  //    case Cons(h, _) if n == 1 => cons(h(), empty)
+  //    case _                    => empty
+  //  }
+
+  // v2
   def take(n: Int): Stream[A] =
     this match {
-      case Cons(h, t) if n > 1  => cons(h(), t().take(n - 1))
-      case Cons(h, _) if n == 1 => cons(h(), empty)
-      case _                    => empty
+      case Cons(h, t) if n > 0 => cons(h(), t().take(n - 1))
+      case _                   => empty[A]
     }
 
-  @annotation.tailrec
-  final def drop(n: Int): Stream[A] =
+  //@annotation.tailrec
+  //final def drop(n: Int): Stream[A] =
+  //  this match {
+  //    case Cons(_, t) if n > 0 => t().drop(n - 1)
+  //    case _                   => this
+  //  }
+
+  // v2
+  def drop(n: Int): Stream[A] =
     this match {
       case Cons(_, t) if n > 0 => t().drop(n - 1)
       case _                   => this
     }
 
+  //def takeWhile(p: A => Boolean): Stream[A] =
+  //  this match {
+  //    case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
+  //    case _                    => empty
+  //  }
+
+  // v2
   def takeWhile(p: A => Boolean): Stream[A] =
     this match {
       case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
-      case _                    => empty
+      case _                    => empty[A]
     }
 
   // 5.4 检测 Stream 中所有元素是否与给定断言匹配，遇到不匹配的值应立即终止
+  //def forAll(p: A => Boolean): Boolean =
+  //  //    foldRight(true)((a, b) => p(a) && b)
+  //  !exists(a => !p(a))
+
+  // v2
   def forAll(p: A => Boolean): Boolean =
-    //    foldRight(true)((a, b) => p(a) && b)
-    !exists(a => !p(a))
+    this match {
+      case Empty      => true
+      case Cons(h, t) => p(h()) && t().forAll(p)
+    }
 
   //  def exists(p: A => Boolean): Boolean =
   //    this match {
@@ -56,17 +84,20 @@ sealed trait Stream[+A] {
   //    }
 
   // 通过 foldRight 重写的 exists (可以提前终止)
+  //def exists(p: A => Boolean): Boolean =
+  //  foldRight(false)((a, b) => p(a) || b)
   def exists(p: A => Boolean): Boolean =
-    foldRight(false)((a, b) => p(a) || b)
+    this match {
+      case Cons(h, t) => p(h()) || t().exists(p)
+      case _          => false
+    }
+
+  def existsViaFoldRight(p: A => Boolean): Boolean =
+    foldRight(false)((x, acc) => p(x) || acc)
 
   // 5.5 使用 foldRight 实现 takeWhile
   def takeWhileViaFoldRight(p: A => Boolean): Stream[A] =
-    foldRight[Stream[A]](empty)((h, t) => {
-      // 此处t.takeWhileViaFoldRight 多余，foldRight 会根据情况，在需要的时候自动调用
-      //        if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
-      if (p(h)) cons(h, t.takeWhileViaFoldRight(p))
-      else empty
-    })
+    foldRight(empty[A])((a, acc) => if (p(a)) cons(a, acc) else empty)
 
   // (难)5.6 使用 foldRight 实现 headOption
   def headOptionViaFoldRight: Option[A] =
@@ -76,15 +107,24 @@ sealed trait Stream[+A] {
   def map[B](f: A => B): Stream[B] =
     foldRight(empty: Stream[B])((h, t) => cons(f(h), t))
 
+  def mapViaFoldRight[B](f: A => B): Stream[B] =
+    foldRight(empty[B])((a, acc) => cons(f(a), acc))
+
   def filter(p: A => Boolean): Stream[A] =
     foldRight(empty: Stream[A])((h, t) => if (p(h)) cons(h, t) else t)
 
-  // 注意 append 的方法泛型
-  def append[B >: A](bs: => Stream[B]): Stream[B] =
-    foldRight(bs)(cons(_, _))
+  def filterViaFoldRight(p: A => Boolean): Stream[A] =
+    foldRight(empty[A])((a, acc) => if (p(a)) cons(a, acc) else acc)
 
   def flatMap[B](f: A => Stream[B]): Stream[B] =
-    foldRight(empty[B])((h, t) => f(h) append t)
+    foldRight(empty[B])((h, t) => f(h) appendViaFoldRight t)
+
+  def flatMapViaFoldRight[B](f: A => Stream[B]): Stream[B] =
+    foldRight(empty[B])((a, acc) => f(a).appendViaFoldRight(acc))
+
+  // 注意 append 的方法泛型
+  def appendViaFoldRight[B >: A](bs: => Stream[B]): Stream[B] =
+    foldRight(bs)(cons(_, _))
 
   // 注意f的第二个参数为传名参数（惰性求值）
   def foldRight[B](z: => B)(f: (A, => B) => B): B =
@@ -93,23 +133,48 @@ sealed trait Stream[+A] {
       case _          => z
     }
 
-  // 5.13 使用 unfold 实现 map、take、takeWhile、zipWith以及zipAll
-  def mapViaFold[B](f: A => B): Stream[B] =
+  // v2
+  def mapViaUnfold[B](f: A => B): Stream[B] =
     unfold(this) {
-      case Cons(x, xs) => Some((f(x()), xs()))
-      case _           => None
+      case Cons(h, t) => Some(f(h()) -> t())
+      case Empty      => None
     }
 
-  def takeViaFold(n: Int): Stream[A] =
+  // 5.13 使用 unfold 实现 map、take、takeWhile、zipWith以及zipAll
+  //def mapViaFold[B](f: A => B): Stream[B] =
+  //  unfold(this) {
+  //    case Cons(x, xs) => Some((f(x()), xs()))
+  //    case _           => None
+  //  }
+
+  def takeViaUnfold(n: Int): Stream[A] =
     unfold((this, n)) {
-      case (Cons(h, t), m) if m > 0 => Some((h(), (t(), m - 1)))
+      case (Cons(h, t), x) if x > 0 => Some(h(), (t(), x - 1))
       case _                        => None
     }
 
-  def takeWhileViaFold(f: A => Boolean): Stream[A] =
+  //def takeViaFold(n: Int): Stream[A] =
+  //  unfold((this, n)) {
+  //    case (Cons(h, t), m) if m > 0 => Some((h(), (t(), m - 1)))
+  //    case _                        => None
+  //  }
+
+  def takeWhileViaUnfold(p: A => Boolean): Stream[A] =
     unfold(this) {
-      case Cons(h, t) if f(h()) => Some((h(), t()))
+      case Cons(h, t) if p(h()) => Some(h(), t())
       case _                    => None
+    }
+
+  //def takeWhileViaFold(f: A => Boolean): Stream[A] =
+  //  unfold(this) {
+  //    case Cons(h, t) if f(h()) => Some((h(), t()))
+  //    case _                    => None
+  //  }
+
+  def zipWithViaUnfold[B, C](bs: Stream[B])(f: (A, B) => C): Stream[C] =
+    unfold((this, bs)) {
+      case (Cons(ha, ta), Cons(hb, tb)) => Some(f(ha(), hb()), (ta(), tb()))
+      case _                            => None
     }
 
   def zipWith[B, C](s2: Stream[B])(f: (A, B) => C): Stream[C] =
@@ -118,14 +183,24 @@ sealed trait Stream[+A] {
       case _                            => None
     }
 
-  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
-    unfold((this, s2)) {
-      case (Cons(h1, t1), Cons(h2, t2)) =>
-        Some(Some(h1()) -> Some(h2()), t1() -> t2())
-      case (Cons(h1, t1), _) => Some(Some(h1()) -> None, t1() -> empty)
-      case (_, Cons(h2, t2)) => Some(None -> Some(h2()), empty -> t2())
-      case _                 => None
-    }
+  def startsWith[A](s: Stream[A]): Boolean =
+    (this zipAll s).foldRight(true)((x, acc) => {
+      x match {
+        case (Some(a), Some(b)) => a == b && acc
+        case (Some(_), None)    => true
+        case (None, None)       => true
+        case _                  => false
+      }
+    })
+
+  //def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
+  //  unfold((this, s2)) {
+  //    case (Cons(h1, t1), Cons(h2, t2)) =>
+  //      Some(Some(h1()) -> Some(h2()), t1() -> t2())
+  //    case (Cons(h1, t1), _) => Some(Some(h1()) -> None, t1() -> empty)
+  //    case (_, Cons(h2, t2)) => Some(None -> Some(h2()), empty -> t2())
+  //    case _                 => None
+  //  }
 
   def zipWithAll[B, C](s: Stream[B])(
       f: (Option[A], Option[B]) => C
@@ -142,13 +217,22 @@ sealed trait Stream[+A] {
 
   // 难 5.14 使用已写过的函数实现 startsWith 函数
   // 简单版本
-  def startsWith[A](s1: Stream[A]): Boolean =
-    (this, s1) match {
-      case (Empty, Empty) => true
-      case (Cons(h1, t1), Cons(h2, t2)) if h1() == h2() =>
-        t1().startsWith(t2())
-      case (Cons(_, _), _) => true
-      case _               => false
+  //def startsWith[A](s1: Stream[A]): Boolean =
+  //  (this, s1) match {
+  //    case (Empty, Empty) => true
+  //    case (Cons(h1, t1), Cons(h2, t2)) if h1() == h2() =>
+  //      t1().startsWith(t2())
+  //    case (Cons(_, _), _) => true
+  //    case _               => false
+  //  }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] =
+    unfold((this, s2)) {
+      case (Cons(ha, ta), Cons(hb, tb)) =>
+        Some(Some(ha()) -> Some(hb()), ta() -> tb())
+      case (Cons(ha, ta), _) => Some((Some(ha()) -> None, ta() -> empty))
+      case (_, Cons(hb, tb)) => Some(((None, Some(hb())), empty -> tb()))
+      case _                 => None
     }
 
   // todo 理解
@@ -156,6 +240,12 @@ sealed trait Stream[+A] {
     zipAll(s1) takeWhile (opt => opt._2.isDefined) forAll {
       case (h1, h2) => h1 == h2
     }
+
+  def tailsViaUnfold: Stream[Stream[A]] =
+    unfold(this) {
+      case Empty => None
+      case s     => Some(s, s.drop(1))
+    } appendViaFoldRight Stream(empty)
 
   // todo 理解
   // 5.15 使用 unfold 实现 tails 函数
@@ -165,23 +255,31 @@ sealed trait Stream[+A] {
     unfold(this) {
       case Empty => None
       case s     => Some((s, s drop 1))
-    } append Stream(empty)
+    } appendViaFoldRight Stream(empty)
 
   // todo 理解
   def hasSubsequence[A](s: Stream[A]): Boolean =
     tails exists (_ startsWith_2 s)
 
-  // todo 5.16
-  // 难***
   def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] =
-    foldRight((z, Stream(z)))((a, b) => {
-      lazy val b1 = b
-      val b2      = f(a, b1._1)
-      (b2, cons(b2, b1._2))
+    foldRight((z, Stream[B](z)))((a, acc) => {
+      lazy val b = acc
+      val v      = f(a, b._1)
+      (v, cons(v, b._2))
     })._2
+
+  // 难***
+  //def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] =
+  //  foldRight((z, Stream(z)))((a, b) => {
+  //    lazy val b1 = b
+  //    val b2      = f(a, b1._1)
+  //    (b2, cons(b2, b1._2))
+  //  })._2
 }
 
 object Stream {
+
+  val ones: Stream[Int] = cons(1, ones)
 
   def cons[A](hd: => A, tl: => Stream[A]): Stream[A] = {
     lazy val head = hd
@@ -195,12 +293,6 @@ object Stream {
     if (as.isEmpty) empty
     else cons(as.head, apply(as.tail: _*))
 
-  def check_5_4(): Unit = {
-    assert(!Stream(1, 2, 3, 4, 5).forAll(i => { assert(i <= 4); i < 4 }))
-    assert(Stream(1, 2, 3, 4, 5).forAll(i => { assert(i <= 6); i < 6 }))
-    assert((empty: Stream[Int]).forAll(i => { assert(i <= 6); i < 6 }))
-  }
-
   def factorial(n: Int): Int = {
     @annotation.tailrec
     def go(n: Int, acc: Int): Int =
@@ -210,50 +302,9 @@ object Stream {
     go(n, 1)
   }
 
-  def check_5_5(): Unit = {
-    assert(
-      Stream(1, 2, 3, 4, 5).toString ==
-        Stream(1, 2, 3, 4, 5)
-          .takeWhileViaFoldRight(i => { assert(i <= 6); i < 6 })
-          .toString
-    )
-    assert(
-      Stream(1, 2, 3).toString ==
-        Stream(1, 2, 3, 4, 5)
-          .takeWhileViaFoldRight(i => { assert(i <= 4); i < 4 })
-          .toString)
-    assert(
-      empty.toString ==
-        (empty: Stream[Int])
-          .takeWhileViaFoldRight(i => { assert(i <= 4); i < 4 })
-          .toString)
-  }
-
-  def check_5_6(): Unit = {
-    assert(Stream(1, 2, 3, 4, 5).headOption == Some(1))
-    assert(Stream(1).headOption == Some(1))
-    assert(empty.headOption == None)
-  }
-
-  def check_5_7_append(): Unit = {
-    assert(
-      Stream(1, 2)
-        .append(Stream(3, 4, 5))
-        .toString == Stream(1, 2, 3, 4, 5).toString)
-    assert(Stream(1).append(empty).toString == Stream(1).toString)
-    assert(empty.append(Stream(1)).toString == Stream(1).toString)
-    assert(empty.append(empty).toString == empty.toString)
-  }
-
   // 5.8 泛化 one 定义 constant，根据给定值返回一个无线流
   def constant[A](a: => A): Stream[A] =
     cons(a, constant(a))
-
-  def check_5_8(): Unit = {
-    assert(Stream(5, 5, 5, 5, 5).toString == constant(5).take(5).toString)
-    assert(
-      Stream(6, 6, 6, 6, 6).toString == constant(5).map(_ + 1).take(5).toString)
-  }
 
   // 无限流与共递归
   //val ones: Stream[Int] = cons(1, ones)
@@ -268,37 +319,33 @@ object Stream {
   def from(n: Int): Stream[Int] =
     cons(n, from(n + 1))
 
-  def check_5_9(): Unit = {
-    assert(Stream(5, 6, 7, 8, 9).toString == from(5).take(5).toString)
-    assert(
-      Stream(7, 8, 9, 10, 11).toString == from(5).map(_ + 2).take(5).toString)
-  }
-
-  // 5.10 写一个 fibs 函数生成斐波那契数列的无限流：0,1,1,2,3,5,8...
-  def fibs(): Stream[Int] =
-    fibs(0, 1)
+  val onesViaUnfold: Stream[Int] = unfold(1)(_ => Some(1, 1))
 
   def fibs(x: Int, y: => Int): Stream[Int] = {
     cons(x, fibs(y, x + y))
   }
 
-  def check_5_10(): Unit = {
-    assert(
-      Stream(0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55).toString
-        == fibs().takeWhile(_ <= 55).toString)
-  }
-
   // 5.11 写一个更加通用的构造流的函数 unfold。
   // 接受一个初始状态，以及一个在生成的 Stream 中用于产生下一状态和下一个值的函数
   // todo 其中的 Option 是用来表示 Stream 何时结束
-  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
-    def go(curr: Option[(A, S)]): Stream[A] =
-      curr match {
-        case Some((a, s)) => cons(a, go(f(s)))
-        case None         => empty
-      }
+  //def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
+  //  def go(curr: Option[(A, S)]): Stream[A] =
+  //    curr match {
+  //      case Some((a, s)) => cons(a, go(f(s)))
+  //      case None         => empty
+  //    }
+  //
+  //  go(f(z))
+  //}
 
-    go(f(z))
+  // 5.10 写一个 fibs 函数生成斐波那契数列的无限流：0,1,1,2,3,5,8...
+  //def fibs(): Stream[Int] =
+  //  fibs(0, 1)
+  def fibs(): Stream[Int] = {
+    def loop(curr: Int, next: => Int): Stream[Int] =
+      cons(curr, loop(next, next + curr))
+
+    loop(0, 1)
   }
 
   // todo check
@@ -313,12 +360,6 @@ object Stream {
   //  go(0, 1)
   //}
 
-  def check_5_12_fibs(): Unit = {
-    assert(
-      Stream(0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55).toString
-        == fibsViaUnfold().takeWhile(_ <= 55).toString)
-  }
-
   def fromViaUnfold(z: Int): Stream[Int] =
     unfold(z)(s => Some(s, s + 1))
 
@@ -330,65 +371,17 @@ object Stream {
   //    case None => empty
   //  }
 
-  def check_5_12_from(): Unit = {
-    assert(Stream(5, 6, 7, 8, 9).toString == fromViaUnfold(5).take(5).toString)
-    assert(
-      Stream(7, 8, 9, 10, 11).toString == fromViaUnfold(5)
-        .map(_ + 2)
-        .take(5)
-        .toString)
-  }
-
   //val fibsViaUnfold =
   //  unfold((0,1)) { case (f0,f1) => Some((f0,(f1,f0+f1))) }
 
   def constantViaUnfold[A](a: A): Stream[A] =
     unfold(a)(_ => Some(a, a))
 
-  def check_5_12_constant(): Unit = {
-    assert(
-      Stream(5, 5, 5, 5, 5).toString == constantViaUnfold(5).take(5).toString)
-    assert(
-      Stream(6, 6, 6, 6, 6).toString == constantViaUnfold(5)
-        .map(_ + 1)
-        .take(5)
-        .toString)
-  }
-
-  def onesViaUnfold(): Stream[Int] =
-    //constant(1)
-    unfold(1)(_ => Some(1, 1))
-
-  def check_5_13_take(): Unit = {
-    assert(Stream(5).takeViaFold(5).toString == Stream(5).toString)
-    assert(empty.takeViaFold(5).toString == empty.toString)
-    assert(
-      Stream(6, 6, 6, 6, 6).takeViaFold(3).toString == Stream(6, 6, 6).toString)
-  }
-
-  def check_5_14(): Unit = {
-    assert(Stream(5).startsWith_2(Stream(5)))
-    assert(Stream(1, 2, 3, 4).startsWith_2(Stream(1, 2, 3)))
-    assert(
-      Stream(1, 2, 3, 4, 5, 6, 7, 8)
-        .startsWith_2(Stream(1)))
-    assert(!Stream(1).startsWith_2(Stream(1, 2, 3, 4, 5, 6, 7, 8)))
-  }
-
-  def main(args: Array[String]): Unit = {
-    //cons({ println("head"); 1 }, empty).takeWhile(_ > 0)
-    //check_5_4()
-    //check_5_5()
-    //check_5_6()
-    //check_5_7_append()
-    //check_5_8()
-    //check_5_9()
-    //check_5_10()
-    //check_5_12_fibs()
-    //check_5_12_from()
-    //check_5_12_constant()
-    //check_5_13_take()
-    check_5_14()
-  }
+  // v2
+  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] =
+    f(z) match {
+      case None         => empty[A]
+      case Some((a, s)) => cons(a, unfold(s)(f))
+    }
 
 }

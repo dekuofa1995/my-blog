@@ -33,6 +33,13 @@ sealed trait Either[+E, +A] {
       bb <- b    //map
     } yield f(aa, bb)
 
+  // For 推导
+  def map2[EE >: E, B, C](eb: Either[EE, B])(f: (A, B) => C): Either[EE, C] =
+    for {
+      a <- this
+      b <- eb
+    } yield f(a, b)
+
 }
 
 case class Left[+E](value: E) extends Either[E, Nothing]
@@ -54,14 +61,14 @@ object Either {
   //      case h :: t => h flatMap ((hh: A) => sequence(t) map ((tt: List[A]) => List(hh, tt)))
   //    }
 
-  def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
-    as match {
-      case Nil    => Right(Nil)
-      case h :: t => (f(h) mapViaFlatMap traverse(t)(f))(_ :: _)
-    }
-
-  def sequence[E, A](es: List[Either[E, A]]): Either[E, List[A]] =
-    traverseViaFoldRight(es)(e => e)
+  //def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
+  //  as match {
+  //    case Nil    => Right(Nil)
+  //    case h :: t => (f(h) mapViaFlatMap traverse(t)(f))(_ :: _)
+  //  }
+  //
+  //def sequence[E, A](es: List[Either[E, A]]): Either[E, List[A]] =
+  //  traverseViaFoldRight(es)(e => e)
 
   // todo 重新理解
   def traverseViaFoldRight[E, A, B](as: List[A])(
@@ -93,5 +100,11 @@ object Either {
   //    val eitherAge  = mkAge(age)
   //    eitherName flatMap (n => eitherAge.flatMap())
   //  }
+
+  //def sequence[E,A](es: List[Either[E, A]]): Either[E, List[A]] =
+
+  def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
+    as.foldRight(Right(Nil): Either[E, List[B]])((a, xs) =>
+      f(a).map2(xs)(_ :: _))
 
 }
