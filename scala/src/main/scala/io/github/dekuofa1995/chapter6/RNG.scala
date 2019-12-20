@@ -4,7 +4,39 @@ trait RNG {
   def nextInt: (Int, RNG)
 }
 
+case class SimpleRNG(seed: Long) extends RNG {
+  override def nextInt: (Int, RNG) = {
+    val newSeed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
+    val nextRNG = SimpleRNG(newSeed)
+    val n       = (newSeed >> 16).toInt
+    (n, nextRNG)
+  }
+}
+
 object RNG {
+
+  def randomPair(rng: RNG): ((Int, Int), RNG) = {
+    val (i1, r1) = rng.nextInt
+    val (i2, r2) = r1.nextInt
+    (i1 -> i2, r2)
+  }
+
+  // 6.1 生成一个非负数的随机数 [0, Int.MaxInt]
+  def nonNegativeInt(rng: RNG): (Int, RNG) = {
+    val (n, r) = rng.nextInt
+    (if (n < 0) -(n + 1) else n, r)
+  }
+
+  //// 6.2 生成 [0,1) 范围内的 Double 数
+  //def double(rng: RNG): (Double, RNG) = {
+  //  val (n, r) = nonNegativeInt(rng)
+  //  (n / (Int.MaxValue.toDouble + 1)) -> r
+  //}
+
+  //def double(rng: RNG): (Double, RNG) = {
+  //  val (n, r) = nonNegativeInt(rng)
+  //  (n / (Int.MaxValue.toDouble + 1), r)
+  //}
 
   // 6.3 生成
   // 一个 (Int, Double)对
@@ -17,17 +49,11 @@ object RNG {
     ((i, d), r2)
   }
 
-  // 6.2 生成 [0,1) 范围内的 Double 数
-  def double(rng: RNG): (Double, RNG) = {
-    val (n, r) = nonNegativeInt(rng)
-    (n / (Int.MaxValue.toDouble + 1)) -> r
-  }
-
   // 生成一个非负随机数，注意需要处理 -Int.MinValue 溢出情况
-  def nonNegativeInt(rng: RNG): (Int, RNG) = {
-    val (n, r) = rng.nextInt
-    (if (n < 0) -(n + 1) else n, r)
-  }
+  //def nonNegativeInt(rng: RNG): (Int, RNG) = {
+  //  val (n, r) = rng.nextInt
+  //  (if (n < 0) -(n + 1) else n, r)
+  //}
 
   def doubleInt(rng: RNG): ((Double, Int), RNG) = {
     val (d, r1) = double(rng)
@@ -43,15 +69,15 @@ object RNG {
   }
 
   // 6.4 生成一组随机数
-  def ints(count: Int)(rng: RNG): (List[Int], RNG) = {
-    if (count > 0) {
-      val (x, r1) = rng.nextInt
-      val (xs, r) = ints(count - 1)(r1)
-      (x :: xs, r)
-    } else {
-      (List.empty[Int], rng)
-    }
-  }
+  //def ints(count: Int)(rng: RNG): (List[Int], RNG) = {
+  //  if (count > 0) {
+  //    val (x, r1) = rng.nextInt
+  //    val (xs, r) = ints(count - 1)(r1)
+  //    (x :: xs, r)
+  //  } else {
+  //    (List.empty[Int], rng)
+  //  }
+  //}
 
   type Rand[+A] = RNG => (A, RNG)
   val int: Rand[Int] = _.nextInt
@@ -60,9 +86,12 @@ object RNG {
   def nonNegativeEven: Rand[Int] =
     map(nonNegativeInt)(i => i - i % 2)
 
+  val double: Rand[Double] =
+    map(nonNegativeInt)(i => i / (Int.MaxValue.toDouble + 1))
+
   // 6.5 生成 [0,1) 范围内的 Double 数
   def doubleViaMap: Rand[Double] =
-    map(nonNegativeInt)(i => i / (Int.MaxValue.doubleValue() + 1))
+    map(nonNegativeInt)(i => i / (Int.MaxValue.toDouble + 1))
 
   def map[A, B](s: Rand[A])(f: A => B): Rand[B] =
     rng => {
@@ -82,15 +111,16 @@ object RNG {
   // 6.6
   def map2[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
     rng => {
-      val (a, rng2) = ra(rng)
-      val (b, rng3) = rb(rng2)
-      (f(a, b), rng3)
+      val (a, r1) = ra(rng)
+      val (b, r2) = rb(r1)
+      (f(a, b), r2)
     }
 
   def sequence[A](fs: List[Rand[A]]): Rand[List[A]] =
-    fs.foldRight(unit[List[A]](Nil))((f, acc) => {
-      map2(f, acc)(_ :: _)
-    })
+    fs.foldRight(unit(List[A]()))((ra, acc) => map2(ra, acc)(_ :: _))
+
+  def ints(n: Int): Rand[List[Int]] =
+    sequence(List.fill(n)(int))
 
   def unit[A](a: A): Rand[A] =
     rng => (a, rng)
@@ -124,15 +154,5 @@ object RNG {
   def rollDie: Rand[Int] = nonNegativeLessThan(6)
 
   def rollDie_Fix: Rand[Int] = map(nonNegativeLessThan(6))(_ + 1)
-
-  case class SimpleRNG(seed: Long) extends RNG {
-    override def nextInt: (Int, RNG) = {
-      val nextSeed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
-      val nextRNG  = SimpleRNG(nextSeed)
-      val n        = (nextSeed >> 16).toInt
-      (n, nextRNG)
-    }
-
-  }
 
 }
